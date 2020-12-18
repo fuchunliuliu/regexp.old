@@ -19,3 +19,6 @@ extern regexp *regcomp(const char *re);
 extern int regexec(regexp *rp, const char *s);
 extern void regsub(const regexp *rp, const char *src, char *dst);
 extern void regerror(char *message);
+#ifdef DEBUG
+void regdump(regexp *r);
+#endif

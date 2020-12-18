@@ -11,7 +11,8 @@ TEST=-I.
 # -pg			profiler
 PROF=
 
-CFLAGS=-O $(ENV) $(TEST) $(PROF)
+#CFLAGS=-O $(ENV) $(TEST) $(PROF)
+CFLAGS=$(ENV) $(TEST) $(PROF) -DDEBUG
 LDFLAGS=$(PROF)
 
 LIB=libregexp.a
