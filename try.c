@@ -11,7 +11,9 @@
  * for compile failure, 'y' for match success, 'n' for match failure.
  * Field separator is tab.
  */
+#include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <regexp.h>
 
 #ifdef ERRAVAIL
@@ -29,57 +31,8 @@ int errreport = 0;		/* Report errors via errseen? */
 char *errseen = NULL;		/* Error message. */
 int status = 0;			/* Exit status. */
 
-/* ARGSUSED */
-main(argc, argv)
-int argc;
-char *argv[];
-{
-	regexp *r;
-	int i;
-
-#ifdef ERRAVAIL
-	progname = mkprogname(argv[0]);
-#endif
-
-	if (argc == 1) {
-		multiple();
-		exit(status);
-	}
-
-	r = regcomp(argv[1]);
-	if (r == NULL)
-		error("regcomp failure", "");
-#ifdef DEBUG
-	regdump(r);
-	if (argc > 4)
-		regnarrate++;
-#endif
-	if (argc > 2) {
-		i = regexec(r, argv[2]);
-		printf("%d", i);
-		for (i = 1; i < NSUBEXP; i++)
-			if (r->startp[i] != NULL && r->endp[i] != NULL)
-				printf(" \\%d", i);
-		printf("\n");
-	}
-	if (argc > 3) {
-		regsub(r, argv[3], buf);
-		printf("%s\n", buf);
-	}
-	exit(status);
-}
-
-void
-regerror(s)
-char *s;
-{
-	if (errreport)
-		errseen = s;
-	else
-		error(s, "");
-}
-
 #ifndef ERRAVAIL
+int 
 error(s1, s2)
 char *s1;
 char *s2;
@@ -91,10 +44,74 @@ char *s2;
 }
 #endif
 
+void
+regerror(s)
+char *s;
+{
+	if (errreport)
+		errseen = s;
+	else
+		error(s, "");
+}
+
 int lineno;
 
 regexp badregexp;		/* Implicit init to 0. */
 
+void
+complain(s1, s2)
+char *s1;
+char *s2;
+{
+	fprintf(stderr, "try: %d: ", lineno);
+	fprintf(stderr, s1, s2);
+	fprintf(stderr, " (%s)\n", (errseen != NULL) ? errseen : "");
+	status = 1;
+}
+
+void 
+try(fields)
+char **fields;
+{
+	regexp *r;
+	char dbuf[BUFSIZ];
+
+	errseen = NULL;
+	r = regcomp(fields[0]);
+	if (r == NULL) {
+		if (*fields[2] != 'c')
+			complain("regcomp failure in `%s'", fields[0]);
+		return;
+	}
+	if (*fields[2] == 'c') {
+		complain("unexpected regcomp success in `%s'", fields[0]);
+		free((char *)r);
+		return;
+	}
+	if (!regexec(r, fields[1])) {
+		if (*fields[2] != 'n')
+			complain("regexec failure in `%s'", fields[0]);
+		free((char *)r);
+		return;
+	}
+	if (*fields[2] == 'n') {
+		complain("unexpected regexec success", "");
+		free((char *)r);
+		return;
+	}
+	errseen = NULL;
+	regsub(r, fields[3], dbuf);
+	if (errseen != NULL) {
+		complain("regsub complaint", "");
+		free((char *)r);
+		return;
+	}
+	if (strcmp(dbuf, fields[4]) != 0)
+		complain("regsub result `%s' wrong", dbuf);
+	free((char *)r);
+}
+
+void
 multiple()
 {
 	char rbuf[BUFSIZ];
@@ -168,53 +185,44 @@ multiple()
 		complain("regsub(nonsense, ..., ...) doesn't complain", "");
 }
 
-try(fields)
-char **fields;
+/* ARGSUSED */
+int 
+main(argc, argv)
+int argc;
+char *argv[];
 {
 	regexp *r;
-	char dbuf[BUFSIZ];
+	int i;
 
-	errseen = NULL;
-	r = regcomp(fields[0]);
-	if (r == NULL) {
-		if (*fields[2] != 'c')
-			complain("regcomp failure in `%s'", fields[0]);
-		return;
+#ifdef ERRAVAIL
+	progname = mkprogname(argv[0]);
+#endif
+
+	if (argc == 1) {
+		multiple();
+		exit(status);
 	}
-	if (*fields[2] == 'c') {
-		complain("unexpected regcomp success in `%s'", fields[0]);
-		free((char *)r);
-		return;
+
+	r = regcomp(argv[1]);
+	if (r == NULL)
+		error("regcomp failure", "");
+#ifdef DEBUG
+	regdump(r);
+	if (argc > 4)
+		regnarrate++;
+#endif
+	if (argc > 2) {
+		i = regexec(r, argv[2]);
+		printf("%d", i);
+		for (i = 1; i < NSUBEXP; i++)
+			if (r->startp[i] != NULL && r->endp[i] != NULL)
+				printf(" \\%d", i);
+		printf("\n");
 	}
-	if (!regexec(r, fields[1])) {
-		if (*fields[2] != 'n')
-			complain("regexec failure in `%s'", fields[0]);
-		free((char *)r);
-		return;
+	if (argc > 3) {
+		regsub(r, argv[3], buf);
+		printf("%s\n", buf);
 	}
-	if (*fields[2] == 'n') {
-		complain("unexpected regexec success", "");
-		free((char *)r);
-		return;
-	}
-	errseen = NULL;
-	regsub(r, fields[3], dbuf);
-	if (errseen != NULL) {
-		complain("regsub complaint", "");
-		free((char *)r);
-		return;
-	}
-	if (strcmp(dbuf, fields[4]) != 0)
-		complain("regsub result `%s' wrong", dbuf);
-	free((char *)r);
+	exit(status);
 }
 
-complain(s1, s2)
-char *s1;
-char *s2;
-{
-	fprintf(stderr, "try: %d: ", lineno);
-	fprintf(stderr, s1, s2);
-	fprintf(stderr, " (%s)\n", (errseen != NULL) ? errseen : "");
-	status = 1;
-}
