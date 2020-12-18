@@ -170,6 +170,7 @@ const char *exp;
 		FAIL("NULL argument to regcomp");
 
 	/* First pass: determine size, legality. */
+	/* 第一次执行reg()时，不将正则表达式转换为状态机，仅计算状态机所有节点消耗的内存大小。 */
 	co.regparse = (char *)exp;
 	co.regnpar = 1;
 	co.regsize = 0L;
@@ -185,11 +186,13 @@ const char *exp;
 		FAIL("regexp too big");
 
 	/* Allocate space. */
+	/* 根据第一次执行reg()时得到的状态机所有节点的内存大小，申请内存。 */
 	r = (regexp *)malloc(sizeof(regexp) + (size_t)co.regsize);
 	if (r == NULL)
 		FAIL("out of space");
 
 	/* Second pass: emit code. */
+	/* 第二次执行reg()时，将正则表达式转换为状态机 */
 	co.regparse = (char *)exp;
 	co.regnpar = 1;
 	co.regcode = r->program;
@@ -261,6 +264,9 @@ int *flagp;
 	*flagp = HASWIDTH;	/* Tentatively. */
 
 	if (paren) {
+		/* 当解析到小括号时，会递归调用reg()函数，由reg()处理小括号中的子表达式.
+		 * 处理流程: reg() -> regbranch() -> regpiece() -> regatom() 解析到正则表达式中的'('-> reg()*/
+
 		/* Make an OPEN node. */
 		if (cp->regnpar >= NSUBEXP)
 			FAIL("too many ()");
@@ -279,23 +285,37 @@ int *flagp;
 		ret = br;
 	*flagp &= ~(~flags&HASWIDTH);	/* Clear bit if bit 0. */
 	*flagp |= flags&SPSTART;
+
+	/* 每次调用regbranch()函数，处理正则表达式中由'|'分隔的一个子表达式
+	 * 示例: 正则表达式为"aa*|bb+|cc?"，每次调用regbranch()，分别处理"aa*", "bb+"和"cc?"子表达式 */
 	while (*cp->regparse == '|') {
 		cp->regparse++;
 		br = regbranch(cp, &flags);
 		if (br == NULL)
 			return(NULL);
+
+		/* 将'|'对应的BRANCH节点，通过next字段链接成链 */
 		regtail(cp, ret, br);	/* BRANCH -> BRANCH. */
+
 		*flagp &= ~(~flags&HASWIDTH);
 		*flagp |= flags&SPSTART;
 	}
 
+	/* 在状态机的结尾添加END节点
+	 * 将BRANCH节点的链，链接到END节点 */
 	/* Make a closing node, and hook it on the end. */
 	ender = regnode(cp, (paren) ? CLOSE+parno : END);
 	regtail(cp, ret, ender);
 
 	/* Hook the tails of the branches to the closing node. */
-	for (br = ret; br != NULL; br = regnext(br))
+	for (br = ret; br != NULL; br = regnext(br)) {
+		/* 正则表达式示例: 
+		 *		"aa*|bb+|cc?"中的三个子表达式"aa*", "bb+"和"cc?"分别对应多个节点；
+		 *		每个子表达式的多个节点均位于一个BRANCH节点的后面；
+		 *		每个子表达式的多个节点已经各自形成链表结构；
+		 *		regoptail()的作用是将一个子表达式的链表，链接到END节点*/
 		regoptail(cp, br, ender);
+	}
 
 	/* Check for proper termination. */
 	if (paren && *cp->regparse++ != ')') {
@@ -332,14 +352,17 @@ int *flagp;
 	ret = regnode(cp, BRANCH);
 	chain = NULL;
 	while ((c = *cp->regparse) != '\0' && c != '|' && c != ')') {
+		/* 正则表达式示例:"子表达式1|子表达式2| .. |子表达式n", 解析每个子表达式时，可能多次调用regpiece() */
 		latest = regpiece(cp, &flags);
 		if (latest == NULL)
 			return(NULL);
 		*flagp |= flags&HASWIDTH;
 		if (chain == NULL)		/* First piece. */
 			*flagp |= flags&SPSTART;
-		else
+		else {
+			/* 将由'|'分隔的子表达式对应的多个节点，链接起来 */
 			regtail(cp, chain, latest);
+		}
 		chain = latest;
 	}
 	if (chain == NULL)			/* Loop ran zero times. */
@@ -379,15 +402,20 @@ int *flagp;
 
 	if (!(flags&HASWIDTH) && op != '?')
 		FAIL("*+ operand could be empty");
+
+	/* 以下代码处理元字符: *+? */
 	switch (op) {
 	case '*':	*flagp = WORST|SPSTART;			break;
 	case '+':	*flagp = WORST|SPSTART|HASWIDTH;	break;
 	case '?':	*flagp = WORST;				break;
 	}
 
-	if (op == '*' && (flags&SIMPLE))
+	if (op == '*' && (flags&SIMPLE)) {
+		/* 示例: "abc*"，该分支执行前，已经添加节点EXACTLY(ab)和EXACTLY(c).
+		 * 该分支执行后，在EXACTLY(c)节点前，插入了一个STAR节点.
+		疑问：else分支在什么情况下会被执行 ??? */
 		reginsert(cp, STAR, ret);
-	else if (op == '*') {
+	} else if (op == '*') {
 		/* Emit x* as (x&|), where & means "self". */
 		reginsert(cp, BRANCH, ret);		/* Either x */
 		regoptail(cp, ret, regnode(cp, BACK));	/* and loop */
@@ -405,10 +433,26 @@ int *flagp;
 		regtail(cp, ret, regnode(cp, NOTHING));	/* null. */
 	} else if (op == '?') {
 		/* Emit x? as (x|) */
+
+		/* 示例: "abc?"，已形成节点: EX(ab) -> EX(c) */
+		/* EX(ab) -> BRANCH, EX(c) */
 		reginsert(cp, BRANCH, ret);		/* Either x */
+
+		/* EX(ab) -> BRANCH, EX(c), BRANCH */
+		               |______________^
 		regtail(cp, ret, regnode(cp, BRANCH));	/* or */
+
+		/* EX(ab) -> BRANCH, EX(c), BRANCH, NOTHING */
+		               |______________^
 		next = regnode(cp, NOTHING);		/* null. */
+
+		/* EX(ab) -> BRANCH, EX(c), BRANCH -> NOTHING */
+		               |______________^
 		regtail(cp, ret, next);
+
+					          |------------------|
+		/* EX(ab) -> BRANCH, EX(c), BRANCH -> NOTHING */
+		               |______________^
 		regoptail(cp, ret, next);
 	}
 	cp->regparse++;
@@ -483,6 +527,7 @@ int *flagp;
 		break;
 		}
 	case '(':
+		/* 小括号中的子表达式，递归调用reg()处理 */
 		ret = reg(cp, 1, &flags);
 		if (ret == NULL)
 			return(NULL);
@@ -508,22 +553,34 @@ int *flagp;
 		*flagp |= HASWIDTH|SIMPLE;
 		break;
 	default: {
+		/* 该分支处理普通字符。
+		 * 在新增的EXACTLY节点中，会添加尽可能多的普通字符。 */
 		register size_t len;
 		register char ender;
 
 		cp->regparse--;
+
+		/* 获取当前位置到下一个元字符间有多少个普通字符 */
 		len = strcspn(cp->regparse, META);
 		if (len == 0)
 			FAIL("internal error: strcspn 0");
+
+		/* 如果元字符是*+?，且其前面有大于1个的普通字符未处理时，则给元字符*+?保留一个普通字符。
+		 * 该普通字符在下次调用regatom()时被处理。 */
 		ender = *(cp->regparse+len);
 		if (len > 1 && ISREPN(ender))
 			len--;		/* Back off clear of ?+* operand. */
+
 		*flagp |= HASWIDTH;
-		if (len == 1)
+
+		if (len == 1) {
 			*flagp |= SIMPLE;
+		}
+
 		ret = regnode(cp, EXACTLY);
-		for (; len > 0; len--)
+		for (; len > 0; len--) {
 			regc(cp, *cp->regparse++);
+		}
 		regc(cp, '\0');
 		break;
 		}
