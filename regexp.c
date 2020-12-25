@@ -890,6 +890,9 @@ char *prog;
 			register const int no = OP(scan) - OPEN;
 			register char *const input = ep->reginput;
 
+			/* 此处递归执行的目的: 为捕获左开括号匹配的位置.
+			 * 不需要捕获的话，可以不递归吗? 可以 */
+#if 0
 			if (regmatch(ep, next)) {
 				/*
 				 * Don't set startp if some later
@@ -901,6 +904,7 @@ char *prog;
 				return(1);
 			} else
 				return(0);
+#endif
 			break;
 			}
 		case CLOSE+1: case CLOSE+2: case CLOSE+3:
@@ -909,6 +913,9 @@ char *prog;
 			register const int no = OP(scan) - CLOSE;
 			register char *const input = ep->reginput;
 
+			/* 此处递归执行的目的: 为捕获右闭括号匹配的位置.
+			 * 不需要捕获的话，可以不递归吗? 可以 */
+#if 0
 			if (regmatch(ep, next)) {
 				/*
 				 * Don't set endp if some later
@@ -920,6 +927,7 @@ char *prog;
 				return(1);
 			} else
 				return(0);
+#endif
 			break;
 			}
 		case BRANCH: {

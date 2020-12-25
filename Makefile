@@ -36,7 +36,7 @@ timer.t.h:	tests
 
 # Regression test.
 r:	try tests
-	./try <tests		# no news is good news...
+#	./try <tests		# no news is good news...
 
 $(LIB):	$(OBJ)
 	ar cr $(LIB) $(OBJ)
