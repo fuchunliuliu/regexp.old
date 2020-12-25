@@ -936,6 +936,10 @@ char *prog;
 			if (OP(next) != BRANCH)		/* No choice. */
 				next = OPERAND(scan);	/* Avoid recursion. */
 			else {
+				/* while的作用: 处理多选结构中的多个子表达式. 示例: "abc|123|def" */
+				/* 元字符'*'和'+'修复由括号分组的子表达式时，会在状态机中生成BRANCH, BACK, BRANCH, NOTHING的节点序列，
+				 * 相当于多选结构 */
+				/* 示例: regex: "ab(cd)+cdcd", string: "abcdcdcdcd"，能够匹配成功. 支持回溯. */
 				while (OP(scan) == BRANCH) {
 					if (regmatch(ep, OPERAND(scan)))
 						return(1);
