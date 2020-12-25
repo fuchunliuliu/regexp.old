@@ -438,21 +438,21 @@ int *flagp;
 		/* EX(ab) -> BRANCH, EX(c) */
 		reginsert(cp, BRANCH, ret);		/* Either x */
 
-		/* EX(ab) -> BRANCH, EX(c), BRANCH */
-		               |______________^
+		/* EX(ab) -> BRANCH, EX(c), BRANCH
+		               |______________^ */
 		regtail(cp, ret, regnode(cp, BRANCH));	/* or */
 
-		/* EX(ab) -> BRANCH, EX(c), BRANCH, NOTHING */
-		               |______________^
+		/* EX(ab) -> BRANCH, EX(c), BRANCH, NOTHING
+		               |______________^ */
 		next = regnode(cp, NOTHING);		/* null. */
 
-		/* EX(ab) -> BRANCH, EX(c), BRANCH -> NOTHING */
-		               |______________^
+		/* EX(ab) -> BRANCH, EX(c), BRANCH -> NOTHING
+		               |______________^ */
 		regtail(cp, ret, next);
 
-					          |------------------|
-		/* EX(ab) -> BRANCH, EX(c), BRANCH -> NOTHING */
-		               |______________^
+		/* 		              |------------------|
+		   EX(ab) -> BRANCH, EX(c), BRANCH -> NOTHING
+		               |______________^ */
 		regoptail(cp, ret, next);
 	}
 	cp->regparse++;
@@ -717,7 +717,7 @@ static int regmatch(struct exec *ep, char *prog);
 static size_t regrepeat(struct exec *ep, char *node);
 
 #ifdef DEBUG
-int regnarrate = 0;
+int regnarrate = 1;
 void regdump();
 static char *regprop();
 #endif

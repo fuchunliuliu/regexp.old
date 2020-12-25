@@ -12,7 +12,7 @@ TEST=-I.
 PROF=
 
 #CFLAGS=-O $(ENV) $(TEST) $(PROF)
-CFLAGS=$(ENV) $(TEST) $(PROF) -DDEBUG
+CFLAGS=$(ENV) $(TEST) $(PROF) -DDEBUG -g
 LDFLAGS=$(PROF)
 
 LIB=libregexp.a
