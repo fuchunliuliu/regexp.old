@@ -21,4 +21,5 @@ extern void regsub(const regexp *rp, const char *src, char *dst);
 extern void regerror(char *message);
 #ifdef DEBUG
 void regdump(regexp *r);
+void regdump_node(char *program, char *node);
 #endif

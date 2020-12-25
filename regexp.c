@@ -707,6 +707,9 @@ struct exec {
 	char *regbol;		/* Beginning of input, for ^ check. */
 	char **regstartp;	/* Pointer to startp array. */
 	char **regendp;		/* Ditto for endp. */
+
+	/* for debug */
+	char *program;
 };
 
 /*
@@ -754,6 +757,7 @@ const char *str;
 	ex.regbol = string;
 	ex.regstartp = prog->startp;
 	ex.regendp = prog->endp;
+	ex.program = prog->program;
 
 	/* Simplest case:  anchored match need be tried only once. */
 	if (prog->reganch)
@@ -823,14 +827,17 @@ char *prog;
 	register char *scan;	/* Current node. */
 	char *next;		/* Next node. */
 
-#ifdef DEBUG
-	if (prog != NULL && regnarrate)
-		fprintf(stderr, "%s(\n", regprop(prog));
-#endif
+//#ifdef DEBUG
+//	if (prog != NULL && regnarrate)
+//		fprintf(stderr, "%2ld%s(\n", prog - ep->program, regprop(prog));
+//#endif
+
 	for (scan = prog; scan != NULL; scan = next) {
 #ifdef DEBUG
-		if (regnarrate)
-			fprintf(stderr, "%s...\n", regprop(scan));
+		if (regnarrate) {
+			//fprintf(stderr, "%2ld%s...\n", scan - ep->program, regprop(scan));
+			regdump_node(ep->program, scan);
+		}
 #endif
 		next = regnext(scan);
 
@@ -1147,4 +1154,35 @@ char *op;
 		(void) strcat(buf, p);
 	return(buf);
 }
+
+void
+regdump_node(program, node)
+char *program;
+char *node;
+{
+	register char *s = node;
+	register char op = EXACTLY;	/* Arbitrary non-END op. */
+	register char *next;
+
+	op = OP(s);
+	printf("%2ld%s", s - program, regprop(s));	/* Where, what. */
+	next = regnext(s);
+	if (next == NULL)		/* Next ptr. */
+		printf("(0)");
+	else 
+		printf("(%ld)", (s - program) + (next - s));
+	s += 3;
+	if (op == ANYOF || op == ANYBUT || op == EXACTLY) {
+		/* Literal string, where present. */
+		while (*s != '\0') {
+			putchar(*s);
+			s++;
+		}
+		s++;
+	}
+	putchar('\n');
+
+	return;
+}
+
 #endif
