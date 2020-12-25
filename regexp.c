@@ -940,6 +940,13 @@ char *prog;
 			break;
 			}
 		case STAR: case PLUS: {
+			/* 示例: "abc+d"
+			 * 对应状态机节点: BRANCH EXACTLY(ab) PLUS EXACTLY(c) EXACTLY(d). 其中PLUS节点的next指向EXACTLY(d).
+			 * 针对于代码:
+			 *		scan变量: 对应PLUS节点. 
+			 *		OPERAND(scan): PLUS节点无操作数,其操作数的指针实际指向EXACTLY(c)节点
+			 *		next变量: 对应EXACTLY(d)节点. 
+			 *		nextch变量值为'd'. */
 			register const char nextch =
 				(OP(next) == EXACTLY) ? *OPERAND(next) : '\0';
 			register size_t no;
@@ -947,6 +954,15 @@ char *prog;
 			register const size_t min = (OP(scan) == STAR) ? 0 : 1;
 
 			for (no = regrepeat(ep, OPERAND(scan)) + 1; no > min; no--) {
+				/* no的值在for初始化时加1，此处又减1. 是对元字符'*'的特殊处理.
+				 * 示例: 正则表达式"abc*d", 目标字符串"abd". 期望能够匹配成功. 
+				 *       但是如果no值初始化时未加1，在判断no > min时不满足条件而退出, 
+				 *       之后的regmatch()未运行，直接报告匹配失败. */
+
+				/* 此处的for循环实际是支持回溯了.
+				 * 示例: 正则表达式"abc+ccc", 目标字符串"abccccc".
+				 *       由于'+'是匹配优先的，子表达式"abc+"能够匹配完整的目标字符串"abccccc".
+				 *       但是由于正则表达式还有子表达式"ccc"，因此'+'的匹配需要回退3次 */
 				ep->reginput = save + no - 1;
 				/* If it could work, try it. */
 				if (nextch == '\0' || *ep->reginput == nextch)
