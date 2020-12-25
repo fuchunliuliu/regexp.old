@@ -213,10 +213,12 @@ char *argv[];
 #endif
 	if (argc > 2) {
 		i = regexec(r, argv[2]);
-		printf("%d", i);
-		for (i = 1; i < NSUBEXP; i++)
-			if (r->startp[i] != NULL && r->endp[i] != NULL)
-				printf(" \\%d", i);
+		printf("%d\n", i);
+		for (i = 0; i < NSUBEXP; i++) {
+			if (r->startp[i] != NULL && r->endp[i] != NULL) {
+				printf("%2d%32s\n%34s\n", i, r->startp[i], r->endp[i]);
+			}
+		}
 		printf("\n");
 	}
 	if (argc > 3) {
